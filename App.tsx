@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { UserProfile, ChatMessage } from './types';
 import Sidebar from './components/Sidebar';
 import ChatInterface from './components/ChatInterface';
@@ -17,9 +17,19 @@ const App: React.FC = () => {
   const [profile, setProfile] = useState<UserProfile | null>(() => {
     try {
       const saved = localStorage.getItem('lc_profile');
-      return saved ? JSON.parse(saved) : null;
+      if (!saved) return null;
+      const parsed = JSON.parse(saved);
+      // Ensure essential fields exist to prevent crashes in sub-components
+      return {
+        ...parsed,
+        learningModules: parsed.learningModules || [],
+        behaviorLogs: parsed.behaviorLogs || [],
+        adviceFeedback: parsed.adviceFeedback || [],
+        points: parsed.points || 0
+      };
     } catch (e) {
-      console.error("Failed to parse profile", e);
+      console.error("Critical: Failed to parse profile", e);
+      localStorage.removeItem('lc_profile'); // Clear corrupted data
       return null;
     }
   });
@@ -52,13 +62,15 @@ const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('lc_messages', JSON.stringify(messages));
     
+    // Logic for AI evolution
     if (profile && messages.length > 0 && messages.length % 5 === 0) {
       const evolveCompanion = async () => {
         try {
           const insights = await updateProfileInsights(profile, messages.slice(-5));
+          if (!insights) return;
+          
           setProfile(prev => {
             if (!prev) return null;
-            
             const oldLogs = prev.behaviorLogs || [];
             const newly = insights.behaviorLogs || [];
             const map = new Map(oldLogs.map((i: any) => [i.pattern, i]));
@@ -78,13 +90,13 @@ const App: React.FC = () => {
 
             return {
               ...prev,
-              behaviorLogs: Array.from(map.values()).slice(-10) as any[],
+              behaviorLogs: Array.from(map.values()).slice(-10),
               adviceFeedback: [...(prev.adviceFeedback || []), ...(insights.adviceFeedback || [])].slice(-20),
               interactionCount: (prev.interactionCount || 0) + 1
             };
           });
         } catch (e) {
-          console.error("Insight evolution failed", e);
+          console.error("Non-critical: Insight evolution failed", e);
         }
       };
       evolveCompanion();
@@ -99,10 +111,8 @@ const App: React.FC = () => {
   const handleLogout = () => {
     setUser(null);
     setProfile(null);
-    localStorage.removeItem('lc_auth_user');
-    localStorage.removeItem('lc_profile');
-    localStorage.removeItem('lc_messages');
-    localStorage.removeItem('lc_learning_modules');
+    localStorage.clear();
+    window.location.reload();
   };
 
   const handleOnboardingComplete = (newProfile: UserProfile) => {
@@ -123,7 +133,7 @@ const App: React.FC = () => {
       <Sidebar currentView={view} setView={setView} profile={profile} onLogout={handleLogout} />
       
       <main className="flex-1 overflow-y-auto flex flex-col">
-        <header className="px-8 py-4 bg-white border-b border-slate-200 flex justify-between items-center sticky top-0 z-10 shadow-sm">
+        <header className="px-8 py-4 bg-white border-b border-slate-200 flex justify-between items-center sticky top-0 z-20 shadow-sm">
           <div className="flex items-center gap-6">
             <div>
               <h1 className="text-xl font-bold text-slate-800">
@@ -157,12 +167,14 @@ const App: React.FC = () => {
         </header>
 
         <div className="flex-1 p-6 max-w-7xl mx-auto w-full">
-          {view === 'dashboard' && <Dashboard profile={profile} />}
-          {view === 'chat' && <ChatInterface messages={messages} addMessage={(m) => setMessages([...messages, m])} profile={profile} />}
-          {view === 'productivity' && <ProductivityTimer />}
-          {view === 'learning' && <LearningHub profile={profile} />}
-          {view === 'health' && <HealthWellness />}
-          {view === 'social' && <SocialIntelligence />}
+          <Suspense fallback={<div className="flex items-center justify-center h-full">جارِ التحميل...</div>}>
+            {view === 'dashboard' && <Dashboard profile={profile} />}
+            {view === 'chat' && <ChatInterface messages={messages} addMessage={(m) => setMessages([...messages, m])} profile={profile} />}
+            {view === 'productivity' && <ProductivityTimer />}
+            {view === 'learning' && <LearningHub profile={profile} />}
+            {view === 'health' && <HealthWellness />}
+            {view === 'social' && <SocialIntelligence />}
+          </Suspense>
         </div>
       </main>
     </div>

@@ -25,12 +25,14 @@ const Dashboard: React.FC<DashboardProps> = ({ profile }) => {
     }
   });
 
+  // Safe parsing of metrics
   const sleepHours = parseFloat(localStorage.getItem('lc_sleep_hours') || '7.5');
   const sleepQuality = parseInt(localStorage.getItem('lc_sleep_quality') || '7');
   
   let mealLogs = [];
   try {
-    mealLogs = JSON.parse(localStorage.getItem('lc_meal_logs') || '[]');
+    const savedMeals = localStorage.getItem('lc_meal_logs');
+    mealLogs = savedMeals ? JSON.parse(savedMeals) : [];
   } catch {
     mealLogs = [];
   }
@@ -41,7 +43,7 @@ const Dashboard: React.FC<DashboardProps> = ({ profile }) => {
   const currentHour = new Date().getHours();
 
   const getTodayPriority = () => {
-    if (profile.examMode) return { type: 'STUDY', label: 'وضع الاختبار القصوى', icon: '🚨', color: 'bg-red-600', priority: 1 };
+    if (profile?.examMode) return { type: 'STUDY', label: 'وضع الاختبار القصوى', icon: '🚨', color: 'bg-red-600', priority: 1 };
     if (energyScore < 45) return { type: 'REST', label: 'الأولوية: التعافي الحيوي', icon: '🛌', color: 'bg-amber-600', priority: 1 };
     if (currentHour < 12 && energyScore > 60) return { type: 'DEEP_WORK', label: 'وقت الإنجاز العميق', icon: '⚡', color: 'bg-indigo-600', priority: 2 };
     if (totalSugar > 45) return { type: 'METABOLIC', label: 'تنبيه: استقرار الأيض', icon: '🥗', color: 'bg-pink-600', priority: 2 };
@@ -55,17 +57,19 @@ const Dashboard: React.FC<DashboardProps> = ({ profile }) => {
   }, [challenges]);
 
   useEffect(() => {
+    let isMounted = true;
     const fetchBriefing = async () => {
       setLoading(true);
       try {
         const text = await generateDailyBriefing(profile, { energy: energyScore, sleep: sleepHours, quality: sleepQuality });
-        setBriefing(text);
+        if (isMounted) setBriefing(text);
       } catch (e) {
-        setBriefing("يوم جديد مع MindHub، فرصة جديدة للتقدم.");
+        if (isMounted) setBriefing("يوم جديد مع MindHub، فرصة جديدة للتقدم.");
       }
-      setLoading(false);
+      if (isMounted) setLoading(false);
     };
     fetchBriefing();
+    return () => { isMounted = false; };
   }, [profile, sleepHours, sleepQuality]);
 
   const incrementChallenge = (id: string) => {
@@ -84,7 +88,7 @@ const Dashboard: React.FC<DashboardProps> = ({ profile }) => {
       <div className={`lg:col-span-12 p-8 rounded-[3rem] text-white shadow-2xl flex flex-col md:flex-row justify-between items-center transition-all ${priority.color}`}>
         <div className="flex items-center gap-6">
           <div className="text-5xl bg-white/20 p-5 rounded-3xl backdrop-blur-md animate-bounce">{priority.icon}</div>
-          <div>
+          <div className="text-right">
             <h2 className="text-3xl font-black mb-1">{priority.label}</h2>
             <p className="text-sm opacity-90 max-w-xl font-medium">
               {priority.type === 'REST' && 'طاقتك حرجة. ركز فقط على النوم، شرب الماء، والمهام الروتينية جداً.'}
@@ -102,24 +106,24 @@ const Dashboard: React.FC<DashboardProps> = ({ profile }) => {
       </div>
 
       <div className="lg:col-span-8 space-y-6">
-        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm transition-all hover:shadow-md">
-          <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-            <span className="bg-indigo-50 p-1.5 rounded-lg text-indigo-600">🤖</span> الإيجاز الذكي المخصص
+        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm transition-all hover:shadow-md text-right">
+          <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2 justify-end">
+            إيجاز ذكي مخصص <span className="bg-indigo-50 p-1.5 rounded-lg text-indigo-600">🤖</span>
           </h3>
           {loading ? (
             <div className="space-y-4 animate-pulse">
-              <div className="h-4 bg-slate-100 rounded w-3/4"></div>
+              <div className="h-4 bg-slate-100 rounded w-3/4 mr-auto"></div>
               <div className="h-24 bg-slate-50 rounded w-full"></div>
             </div>
           ) : (
-            <div className="prose prose-indigo prose-sm max-w-none text-slate-600 leading-relaxed whitespace-pre-wrap">
+            <div className="prose prose-indigo prose-sm max-w-none text-slate-600 leading-relaxed whitespace-pre-wrap text-right">
               {briefing}
             </div>
           )}
         </div>
 
         {energyScore >= 45 && (
-          <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm animate-in slide-in-from-bottom-4">
+          <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm animate-in slide-in-from-bottom-4 text-right">
             <h3 className="text-lg font-bold text-slate-800 mb-8">اتجاه تدفق الإنتاجية 📈</h3>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
@@ -146,23 +150,23 @@ const Dashboard: React.FC<DashboardProps> = ({ profile }) => {
       </div>
 
       <div className="lg:col-span-4 space-y-6">
-        <div className="bg-slate-900 p-8 rounded-[2.5rem] text-white shadow-xl relative overflow-hidden group">
+        <div className="bg-slate-900 p-8 rounded-[2.5rem] text-white shadow-xl relative overflow-hidden group text-right">
           <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full -mr-16 -mt-16 blur-3xl group-hover:bg-indigo-500/20 transition-all"></div>
           <h3 className="text-lg font-bold mb-6 flex justify-between items-center">
-            <span>تحديات الأسبوع</span>
             <span className="text-[10px] font-bold text-indigo-400">التحديث القادم: الأحد</span>
+            <span>تحديات الأسبوع</span>
           </h3>
           <div className="space-y-6">
-            {challenges.filter(c => priority.type === 'REST' ? c.category === 'health' : true).map(challenge => {
+            {Array.isArray(challenges) && challenges.filter(c => priority.type === 'REST' ? c.category === 'health' : true).map(challenge => {
               const isComplete = challenge.currentCount >= challenge.targetCount;
               return (
                 <div key={challenge.id} className="relative">
                   <div className="flex justify-between text-[11px] mb-2 font-bold">
-                    <span className="opacity-70">{challenge.title}</span>
                     <span className={isComplete ? 'text-emerald-400' : 'text-indigo-400'}>{challenge.currentCount}/{challenge.targetCount}</span>
+                    <span className="opacity-70">{challenge.title}</span>
                   </div>
                   <div className="h-1.5 bg-white/10 rounded-full overflow-hidden mb-2">
-                    <div className={`h-full transition-all duration-1000 ${isComplete ? 'bg-emerald-400' : 'bg-indigo-500'}`} style={{ width: `${(challenge.currentCount/challenge.targetCount)*100}%` }}></div>
+                    <div className={`h-full transition-all duration-1000 ${isComplete ? 'bg-emerald-400' : 'bg-indigo-500'}`} style={{ width: `${Math.min(100, (challenge.currentCount/challenge.targetCount)*100)}%` }}></div>
                   </div>
                   {!isComplete && (
                     <button 
@@ -178,9 +182,9 @@ const Dashboard: React.FC<DashboardProps> = ({ profile }) => {
           </div>
         </div>
 
-        {energyScore > 75 && !profile.examMode && (
-          <div className="bg-white p-8 rounded-[2.5rem] border border-emerald-100 shadow-sm animate-in zoom-in-95 transition-all hover:scale-[1.02]">
-             <h4 className="font-bold text-slate-800 mb-3 flex items-center gap-2"><span>🤝</span> فرصة اجتماعية</h4>
+        {energyScore > 75 && !profile?.examMode && (
+          <div className="bg-white p-8 rounded-[2.5rem] border border-emerald-100 shadow-sm animate-in zoom-in-95 transition-all hover:scale-[1.02] text-right">
+             <h4 className="font-bold text-slate-800 mb-3 flex items-center gap-2 justify-end">فرصة اجتماعية <span>🤝</span></h4>
              <p className="text-xs text-slate-500 leading-relaxed mb-4">طاقتك الحيوية ممتازة الآن. هذا هو أفضل وقت للتواصل مع المقربين وتجديد الروابط الاجتماعية.</p>
              <button className="w-full py-3 bg-emerald-50 text-emerald-700 rounded-2xl text-[10px] font-black hover:bg-emerald-100 transition-colors">مراجعة قائمة التواصل</button>
           </div>
