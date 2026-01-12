@@ -1,0 +1,8 @@
+{
+  "name": "MindHub",
+  "description": "نظام ذكاء اصطناعي متكامل للحياة، الإنتاجية، والصحة. برمجت بواسطة عبد الحق قحمام.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
