@@ -13,18 +13,29 @@ const Dashboard: React.FC<DashboardProps> = ({ profile }) => {
   const [loading, setLoading] = useState(true);
   
   const [challenges, setChallenges] = useState<WeeklyChallenge[]>(() => {
-    const saved = localStorage.getItem('lc_weekly_challenges');
-    return saved ? JSON.parse(saved) : [
-      { id: 'c1', title: 'ثبات النوم', targetCount: 5, currentCount: 3, category: 'health', points: 50, description: 'الحصول على 7 ساعات نوم لمدة 5 أيام.' },
-      { id: 'c2', title: 'جلسات التركيز', targetCount: 10, currentCount: 7, category: 'productivity', points: 40, description: 'إكمال 10 جلسات دراسية عميقة.' },
-      { id: 'c3', title: 'التواصل العائلي', targetCount: 3, currentCount: 1, category: 'social', points: 30, description: 'إجراء 3 محادثات مطولة مع المقربين.' }
-    ];
+    try {
+      const saved = localStorage.getItem('lc_weekly_challenges');
+      return saved ? JSON.parse(saved) : [
+        { id: 'c1', title: 'ثبات النوم', targetCount: 5, currentCount: 3, category: 'health', points: 50, description: 'الحصول على 7 ساعات نوم لمدة 5 أيام.' },
+        { id: 'c2', title: 'جلسات التركيز', targetCount: 10, currentCount: 7, category: 'productivity', points: 40, description: 'إكمال 10 جلسات دراسية عميقة.' },
+        { id: 'c3', title: 'التواصل العائلي', targetCount: 3, currentCount: 1, category: 'social', points: 30, description: 'إجراء 3 محادثات مطولة مع المقربين.' }
+      ];
+    } catch {
+      return [];
+    }
   });
 
   const sleepHours = parseFloat(localStorage.getItem('lc_sleep_hours') || '7.5');
   const sleepQuality = parseInt(localStorage.getItem('lc_sleep_quality') || '7');
-  const mealLogs = JSON.parse(localStorage.getItem('lc_meal_logs') || '[]');
-  const totalSugar = mealLogs.reduce((acc: number, curr: any) => acc + (curr.sugar || 0), 0);
+  
+  let mealLogs = [];
+  try {
+    mealLogs = JSON.parse(localStorage.getItem('lc_meal_logs') || '[]');
+  } catch {
+    mealLogs = [];
+  }
+  
+  const totalSugar = Array.isArray(mealLogs) ? mealLogs.reduce((acc: number, curr: any) => acc + (curr.sugar || 0), 0) : 0;
   
   const energyScore = Math.round((Math.min(sleepHours / 8, 1) * 40) + ((sleepQuality / 10) * 40) + 20);
   const currentHour = new Date().getHours();
@@ -46,8 +57,12 @@ const Dashboard: React.FC<DashboardProps> = ({ profile }) => {
   useEffect(() => {
     const fetchBriefing = async () => {
       setLoading(true);
-      const text = await generateDailyBriefing(profile, { energy: energyScore, sleep: sleepHours, quality: sleepQuality });
-      setBriefing(text);
+      try {
+        const text = await generateDailyBriefing(profile, { energy: energyScore, sleep: sleepHours, quality: sleepQuality });
+        setBriefing(text);
+      } catch (e) {
+        setBriefing("يوم جديد مع MindHub، فرصة جديدة للتقدم.");
+      }
       setLoading(false);
     };
     fetchBriefing();
@@ -65,7 +80,7 @@ const Dashboard: React.FC<DashboardProps> = ({ profile }) => {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-in fade-in duration-500" dir="rtl">
       
-      {/* Priority Highlight: Primary focus for today */}
+      {/* Priority Highlight */}
       <div className={`lg:col-span-12 p-8 rounded-[3rem] text-white shadow-2xl flex flex-col md:flex-row justify-between items-center transition-all ${priority.color}`}>
         <div className="flex items-center gap-6">
           <div className="text-5xl bg-white/20 p-5 rounded-3xl backdrop-blur-md animate-bounce">{priority.icon}</div>
@@ -87,7 +102,6 @@ const Dashboard: React.FC<DashboardProps> = ({ profile }) => {
       </div>
 
       <div className="lg:col-span-8 space-y-6">
-        {/* Intelligence Briefing Module */}
         <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm transition-all hover:shadow-md">
           <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
             <span className="bg-indigo-50 p-1.5 rounded-lg text-indigo-600">🤖</span> الإيجاز الذكي المخصص
@@ -104,7 +118,6 @@ const Dashboard: React.FC<DashboardProps> = ({ profile }) => {
           )}
         </div>
 
-        {/* Energy Chart: Automatically hide if energy is too low to avoid stress */}
         {energyScore >= 45 && (
           <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm animate-in slide-in-from-bottom-4">
             <h3 className="text-lg font-bold text-slate-800 mb-8">اتجاه تدفق الإنتاجية 📈</h3>
@@ -133,7 +146,6 @@ const Dashboard: React.FC<DashboardProps> = ({ profile }) => {
       </div>
 
       <div className="lg:col-span-4 space-y-6">
-        {/* Weekly Progress Module */}
         <div className="bg-slate-900 p-8 rounded-[2.5rem] text-white shadow-xl relative overflow-hidden group">
           <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full -mr-16 -mt-16 blur-3xl group-hover:bg-indigo-500/20 transition-all"></div>
           <h3 className="text-lg font-bold mb-6 flex justify-between items-center">
@@ -166,7 +178,6 @@ const Dashboard: React.FC<DashboardProps> = ({ profile }) => {
           </div>
         </div>
 
-        {/* Social Opportunity Module: Only visible if energy is HIGH and it's NOT Exam Mode */}
         {energyScore > 75 && !profile.examMode && (
           <div className="bg-white p-8 rounded-[2.5rem] border border-emerald-100 shadow-sm animate-in zoom-in-95 transition-all hover:scale-[1.02]">
              <h4 className="font-bold text-slate-800 mb-3 flex items-center gap-2"><span>🤝</span> فرصة اجتماعية</h4>
@@ -174,21 +185,6 @@ const Dashboard: React.FC<DashboardProps> = ({ profile }) => {
              <button className="w-full py-3 bg-emerald-50 text-emerald-700 rounded-2xl text-[10px] font-black hover:bg-emerald-100 transition-colors">مراجعة قائمة التواصل</button>
           </div>
         )}
-
-        {/* Companion Feedback Logic */}
-        <div className={`p-8 rounded-[2.5rem] border transition-all ${priority.type === 'REST' ? 'bg-amber-50 border-amber-100' : 'bg-slate-50 border-slate-100'}`}>
-           <div className="flex gap-4 items-start">
-             <span className="text-2xl">{priority.type === 'REST' ? '🛌' : '💡'}</span>
-             <div>
-               <h4 className={`text-xs font-black mb-1 uppercase tracking-wider ${priority.type === 'REST' ? 'text-amber-800' : 'text-slate-800'}`}>رؤية الرفيق اليوم</h4>
-               <p className={`text-[10px] leading-relaxed font-medium ${priority.type === 'REST' ? 'text-amber-700/80' : 'text-slate-500'}`}>
-                 {priority.type === 'REST' 
-                   ? 'تم تقليل الواجهة لعرض الأساسيات فقط. صحتك هي المحرك الأول لكل أهدافك، اعتني بها اليوم.' 
-                   : 'كل الأنظمة تعمل بكفاءة. لا تشتت نفسك بمهام جانبية، ركز على الأولوية الموضحة في الأعلى.'}
-               </p>
-             </div>
-           </div>
-        </div>
       </div>
     </div>
   );

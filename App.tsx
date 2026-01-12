@@ -15,14 +15,19 @@ import { updateProfileInsights } from './services/geminiService';
 const App: React.FC = () => {
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<UserProfile | null>(() => {
-    const saved = localStorage.getItem('lc_profile');
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const saved = localStorage.getItem('lc_profile');
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      console.error("Failed to parse profile", e);
+      return null;
+    }
   });
 
   const [view, setView] = useState<'dashboard' | 'chat' | 'productivity' | 'learning' | 'health' | 'social'>('dashboard');
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
-    const saved = localStorage.getItem('lc_messages');
     try {
+      const saved = localStorage.getItem('lc_messages');
       return saved ? JSON.parse(saved).map((m: any) => ({...m, timestamp: new Date(m.timestamp)})) : [];
     } catch {
       return [];
@@ -49,34 +54,38 @@ const App: React.FC = () => {
     
     if (profile && messages.length > 0 && messages.length % 5 === 0) {
       const evolveCompanion = async () => {
-        const insights = await updateProfileInsights(profile, messages.slice(-5));
-        setProfile(prev => {
-          if (!prev) return null;
-          
-          const oldLogs = prev.behaviorLogs || [];
-          const newly = insights.behaviorLogs || [];
-          const map = new Map(oldLogs.map((i: any) => [i.pattern, i]));
-          
-          newly.forEach((item: any) => {
-            if (map.has(item.pattern)) {
-              const existing = map.get(item.pattern);
-              map.set(item.pattern, { 
-                ...existing, 
-                occurrences: (existing.occurrences || 1) + 1,
-                lastDetected: new Date().toISOString()
-              });
-            } else {
-              map.set(item.pattern, { ...item, occurrences: 1, lastDetected: new Date().toISOString() });
-            }
-          });
+        try {
+          const insights = await updateProfileInsights(profile, messages.slice(-5));
+          setProfile(prev => {
+            if (!prev) return null;
+            
+            const oldLogs = prev.behaviorLogs || [];
+            const newly = insights.behaviorLogs || [];
+            const map = new Map(oldLogs.map((i: any) => [i.pattern, i]));
+            
+            newly.forEach((item: any) => {
+              if (map.has(item.pattern)) {
+                const existing = map.get(item.pattern);
+                map.set(item.pattern, { 
+                  ...existing, 
+                  occurrences: (existing.occurrences || 1) + 1,
+                  lastDetected: new Date().toISOString()
+                });
+              } else {
+                map.set(item.pattern, { ...item, occurrences: 1, lastDetected: new Date().toISOString() });
+              }
+            });
 
-          return {
-            ...prev,
-            behaviorLogs: Array.from(map.values()).slice(-10) as any[],
-            adviceFeedback: [...(prev.adviceFeedback || []), ...(insights.adviceFeedback || [])].slice(-20),
-            interactionCount: (prev.interactionCount || 0) + 1
-          };
-        });
+            return {
+              ...prev,
+              behaviorLogs: Array.from(map.values()).slice(-10) as any[],
+              adviceFeedback: [...(prev.adviceFeedback || []), ...(insights.adviceFeedback || [])].slice(-20),
+              interactionCount: (prev.interactionCount || 0) + 1
+            };
+          });
+        } catch (e) {
+          console.error("Insight evolution failed", e);
+        }
       };
       evolveCompanion();
     }
@@ -93,6 +102,7 @@ const App: React.FC = () => {
     localStorage.removeItem('lc_auth_user');
     localStorage.removeItem('lc_profile');
     localStorage.removeItem('lc_messages');
+    localStorage.removeItem('lc_learning_modules');
   };
 
   const handleOnboardingComplete = (newProfile: UserProfile) => {
