@@ -2,7 +2,13 @@
 import { GoogleGenAI, Type, FunctionDeclaration } from "@google/genai";
 import { UserProfile, ChatMessage, LearningModule } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+// Safety check for API key
+const apiKey = process.env.API_KEY;
+if (!apiKey) {
+  console.warn("API_KEY is missing. AI features will not function.");
+}
+
+const ai = new GoogleGenAI({ apiKey: apiKey || "" });
 
 const updateLearningModuleDeclaration: FunctionDeclaration = {
   name: 'updateLearningModule',
@@ -43,10 +49,9 @@ export const getGeminiResponse = async (
 ) => {
   const model = "gemini-3-flash-preview";
   const learningModules: LearningModule[] = JSON.parse(localStorage.getItem('lc_learning_modules') || '[]');
-  const now = new Date();
   
   const learningSummary = learningModules.map(m => 
-    `- ${m.name}: ${m.completionPercentage}% (تمارين: ${m.exercisesCompleted}/${m.exercisesTotal}). المرحلة: ${m.reviewStage || 0}. المراجعة القادمة: ${m.nextReviewDate ? new Date(m.nextReviewDate).toLocaleDateString() : 'لا يوجد'}. ملخص PDF: ${m.pdfSummaryUrl ? 'متوفر' : 'غير متوفر'}`
+    `- ${m.name}: ${m.completionPercentage}% (تمارين: ${m.exercisesCompleted}/${m.exercisesTotal}). المرحلة: ${m.reviewStage || 0}. المراجعة القادمة: ${m.nextReviewDate ? new Date(m.nextReviewDate).toLocaleDateString() : 'لا يوجد'}.`
   ).join('\n');
 
   const systemInstruction = `
@@ -77,7 +82,7 @@ export const getGeminiResponse = async (
   try {
     const response = await ai.models.generateContent({
       model,
-      contents: { parts: contents.flatMap(c => c.parts) },
+      contents: { parts: contents.flatMap(c => (Array.isArray(c.parts) ? c.parts : [c.parts])) },
       config: { 
         systemInstruction, 
         temperature: 0.7,
@@ -85,23 +90,23 @@ export const getGeminiResponse = async (
       }
     });
 
-    if (response.functionCalls) {
+    if (response.functionCalls && response.functionCalls.length > 0) {
       for (const call of response.functionCalls) {
         if (call.name === 'updateLearningModule') {
-          const { moduleName, completionPercentage, exercisesDelta, isReviewComplete, notes } = call.args as any;
-          updateModuleLocally(moduleName, completionPercentage, exercisesDelta, isReviewComplete, notes);
+          const args = call.args as any;
+          updateModuleLocally(args.moduleName, args.completionPercentage, args.exercisesDelta, args.isReviewComplete, args.notes);
         }
       }
       
       const secondResponse = await ai.models.generateContent({
           model,
-          contents: [...contents.flatMap(c => c.parts), { text: "تم تحديث سجلات التعلم. أخبر المستخدم بالنتيجة والاقتراح القادم بوضوح بأسلوب رفيقك الذكي MindHub." }],
+          contents: [{ text: "تم تحديث سجلات التعلم. أخبر المستخدم بالنتيجة والاقتراح القادم بوضوح بأسلوب رفيقك الذكي MindHub." }],
           config: { systemInstruction }
       });
       return secondResponse.text;
     }
 
-    return response.text;
+    return response.text || "لم أتمكن من الحصول على رد مفيد حالياً.";
   } catch (error) {
     console.error("Gemini Error:", error);
     return "أنا MindHub، رفيقك معك دائماً. واجهت مشكلة تقنية بسيطة، لكن يمكننا المتابعة.";
@@ -167,11 +172,13 @@ const updateModuleLocally = (name: string, percentage?: number, delta?: number, 
 
 export const updateProfileInsights = async (profile: UserProfile, recentMessages: ChatMessage[]) => {
   const model = "gemini-3-flash-preview";
-  const prompt = `أنت MindHub. حلل السلوكيات والاحتياجات بناءً على هذه المحادثة: ${JSON.stringify(recentMessages.map(m => m.text))}. أرجع JSON فقط.`;
+  const prompt = `أنت MindHub. حلل السلوكيات والاحتياجات بناءً على هذه المحادثة: ${JSON.stringify(recentMessages.map(m => m.text))}. أرجع JSON فقط يحتوي على behaviorLogs و adviceFeedback.`;
   try {
     const res = await ai.models.generateContent({ model, contents: prompt, config: { responseMimeType: "application/json" } });
     return JSON.parse(res.text || '{"behaviorLogs":[], "adviceFeedback":[]}');
-  } catch (e) { return { behaviorLogs: [], adviceFeedback: [] }; }
+  } catch (e) { 
+    return { behaviorLogs: [], adviceFeedback: [] }; 
+  }
 };
 
 export const generateDailyBriefing = async (profile: UserProfile, stats: { energy: number, sleep: number, quality: number }) => {
@@ -181,12 +188,14 @@ export const generateDailyBriefing = async (profile: UserProfile, stats: { energ
   const due = modules.filter(m => m.nextReviewDate && new Date(m.nextReviewDate) <= now);
   
   const prompt = `بصفتك MindHub، قدم إيجازاً ذكياً. 
-  الطاقة: ${stats.energy}%. 
+  المستخدم: ${profile.name}. الطاقة: ${stats.energy}%. 
   المراجعات المستحقة: ${due.map(m => m.name).join('، ')}. 
   قدم نصيحة واحدة محددة بأسلوب محفز جداً.`;
   
   try {
     const res = await ai.models.generateContent({ model, contents: prompt });
-    return res.text;
-  } catch (e) { return "يوم جديد مع MindHub، فرصة جديدة للتقدم."; }
+    return res.text || "يوم جديد مع MindHub، فرصة جديدة للتقدم.";
+  } catch (e) { 
+    return "يوم جديد مع MindHub، فرصة جديدة للتقدم."; 
+  }
 };

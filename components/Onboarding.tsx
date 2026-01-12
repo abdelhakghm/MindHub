@@ -47,28 +47,32 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete }) => {
         sessionOutputs: [],
         examMode: false,
         energyPatterns: { peakHours: [9, 10, 11], averageSleepDuration: 7.5 },
-        interactionCount: 0
+        interactionCount: 0,
+        learningModules: []
       };
       setTimeout(() => onComplete(finalProfile), 1000);
       return;
     }
 
+    const mockProfile: UserProfile = { 
+      name: '', 
+      goals: [], 
+      challenges: [], 
+      focusAreas: [], 
+      onboarded: false, 
+      points: 0, 
+      habits: [], 
+      adviceFeedback: [],
+      behaviorLogs: [],
+      sessionOutputs: [],
+      examMode: false,
+      interactionCount: 0, 
+      energyPatterns: { peakHours: [9, 10, 11], averageSleepDuration: 7.5 },
+      learningModules: []
+    };
+
     const response = await getGeminiResponse(
-      { 
-        name: '', 
-        goals: [], 
-        challenges: [], 
-        focusAreas: [], 
-        onboarded: false, 
-        points: 0, 
-        habits: [], 
-        adviceFeedback: [],
-        behaviorLogs: [],
-        sessionOutputs: [],
-        examMode: false,
-        interactionCount: 0, 
-        energyPatterns: { peakHours: [], averageSleepDuration: 0 } 
-      },
+      mockProfile,
       messages,
       input + " (أجب باختصار واطلب معلومة إضافية عن روتينك اليومي أو ما يعيقك حالياً)"
     );

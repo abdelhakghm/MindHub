@@ -13,7 +13,7 @@ import AuthGateway from './components/AuthGateway';
 import { updateProfileInsights } from './services/geminiService';
 
 const App: React.FC = () => {
-  const [user, setUser] = useState<any>(null); // Supabase User object
+  const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<UserProfile | null>(() => {
     const saved = localStorage.getItem('lc_profile');
     return saved ? JSON.parse(saved) : null;
@@ -22,13 +22,22 @@ const App: React.FC = () => {
   const [view, setView] = useState<'dashboard' | 'chat' | 'productivity' | 'learning' | 'health' | 'social'>('dashboard');
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     const saved = localStorage.getItem('lc_messages');
-    return saved ? JSON.parse(saved).map((m: any) => ({...m, timestamp: new Date(m.timestamp)})) : [];
+    try {
+      return saved ? JSON.parse(saved).map((m: any) => ({...m, timestamp: new Date(m.timestamp)})) : [];
+    } catch {
+      return [];
+    }
   });
 
-  // Load user from session simulation (would be Supabase auth listener)
   useEffect(() => {
     const savedUser = localStorage.getItem('lc_auth_user');
-    if (savedUser) setUser(JSON.parse(savedUser));
+    if (savedUser) {
+      try {
+        setUser(JSON.parse(savedUser));
+      } catch {
+        localStorage.removeItem('lc_auth_user');
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -43,26 +52,27 @@ const App: React.FC = () => {
         const insights = await updateProfileInsights(profile, messages.slice(-5));
         setProfile(prev => {
           if (!prev) return null;
-          const updateLogs = (old: any[] = [], newly: any[] = []) => {
-            const map = new Map(old.map(i => [i.pattern, i]));
-            newly.forEach(item => {
-              if (map.has(item.pattern)) {
-                const existing = map.get(item.pattern);
-                map.set(item.pattern, { 
-                  ...existing, 
-                  occurrences: (existing.occurrences || 1) + 1,
-                  lastDetected: new Date().toISOString()
-                });
-              } else {
-                map.set(item.pattern, { ...item, occurrences: 1, lastDetected: new Date().toISOString() });
-              }
-            });
-            return Array.from(map.values()).slice(-10);
-          };
+          
+          const oldLogs = prev.behaviorLogs || [];
+          const newly = insights.behaviorLogs || [];
+          const map = new Map(oldLogs.map((i: any) => [i.pattern, i]));
+          
+          newly.forEach((item: any) => {
+            if (map.has(item.pattern)) {
+              const existing = map.get(item.pattern);
+              map.set(item.pattern, { 
+                ...existing, 
+                occurrences: (existing.occurrences || 1) + 1,
+                lastDetected: new Date().toISOString()
+              });
+            } else {
+              map.set(item.pattern, { ...item, occurrences: 1, lastDetected: new Date().toISOString() });
+            }
+          });
 
           return {
             ...prev,
-            behaviorLogs: updateLogs(prev.behaviorLogs, insights.behaviorLogs),
+            behaviorLogs: Array.from(map.values()).slice(-10) as any[],
             adviceFeedback: [...(prev.adviceFeedback || []), ...(insights.adviceFeedback || [])].slice(-20),
             interactionCount: (prev.interactionCount || 0) + 1
           };
@@ -70,7 +80,7 @@ const App: React.FC = () => {
       };
       evolveCompanion();
     }
-  }, [messages]);
+  }, [messages, profile]);
 
   const handleAuthSuccess = (userData: any) => {
     setUser(userData);
@@ -79,37 +89,27 @@ const App: React.FC = () => {
 
   const handleLogout = () => {
     setUser(null);
+    setProfile(null);
     localStorage.removeItem('lc_auth_user');
+    localStorage.removeItem('lc_profile');
+    localStorage.removeItem('lc_messages');
   };
 
   const handleOnboardingComplete = (newProfile: UserProfile) => {
-    const initializedProfile: UserProfile = {
-      ...newProfile,
-      habits: [],
-      adviceFeedback: [],
-      behaviorLogs: [],
-      sessionOutputs: [],
-      examMode: false,
-      energyPatterns: { peakHours: [9, 10, 11], averageSleepDuration: 7.5 },
-      interactionCount: 0,
-      points: 100
-    };
-    setProfile(initializedProfile);
+    setProfile(newProfile);
     setView('dashboard');
   };
 
-  // 1. Check if authenticated
   if (!user) {
     return <AuthGateway onAuthSuccess={handleAuthSuccess} />;
   }
 
-  // 2. Check if onboarded
   if (!profile || !profile.onboarded) {
     return <Onboarding onComplete={handleOnboardingComplete} />;
   }
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
+    <div className="flex h-screen bg-slate-50 overflow-hidden font-sans" dir="rtl">
       <Sidebar currentView={view} setView={setView} profile={profile} onLogout={handleLogout} />
       
       <main className="flex-1 overflow-y-auto flex flex-col">
